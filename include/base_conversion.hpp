@@ -35,7 +35,14 @@ inline auto trim_leading_zeros(std::string_view str) noexcept
 
 template <bool uppercase = true>
 inline constexpr auto decimal_to_hexadecimal_map(int digit) noexcept -> char {
-    return digit < 0 ? '0' + digit : (uppercase ? 'A' : 'a') + digit - 10;
+    static constexpr std::array<char, 16> upper_chars = {
+        '0', '1', '2', '3', '4', '5', '6', '7',
+        '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+    static constexpr std::array<char, 16> lower_chars = {
+        '0', '1', '2', '3', '4', '5', '6', '7',
+        '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+
+    return uppercase ? upper_chars[digit] : lower_chars[digit];
 }
 
 inline constexpr auto hexadecimal_to_binary_map(int digit) noexcept
@@ -158,6 +165,14 @@ inline auto to_uint64_t(std::string_view str) -> uint64_t {
 
     return result;
 }
+
+inline auto validate_binary_string(std::string_view str) -> void {
+    for (auto &&ch : str) {
+        if (ch != '0' && ch != '1') {
+            throw_invalid_character_error(ch);
+        }
+    }
+}
 } // namespace details
 
 inline auto zero_padding(std::string_view str, std::size_t multiple)
@@ -169,20 +184,14 @@ inline auto zero_padding(std::string_view str, std::size_t multiple)
     }
 
     std::string result(str);
-    while (str.size() % multiple != 0) {
-        result.insert(result.begin(), '0');
-    }
+    auto const padding_num = (multiple - (result.size() % multiple)) % multiple;
+    result.insert(0, padding_num, '0');
     return result;
 }
 
 inline auto binary_to_octal(std::string_view str) -> std::string {
     details::check_empty_string(str);
-
-    for (auto &&ch : str) {
-        if (ch != '0' && ch != '1') {
-            details::throw_invalid_character_error(ch);
-        }
-    }
+    details::validate_binary_string(str);
 
     auto padded_str = zero_padding(details::trim_leading_zeros(str), 3);
 
@@ -219,12 +228,7 @@ inline auto binary_to_decimal(std::string_view str) -> std::string {
 
 inline auto binary_to_hexadecimal(std::string_view str) -> std::string {
     details::check_empty_string(str);
-
-    for (auto &&ch : str) {
-        if (ch != '0' && ch != '1') {
-            details::throw_invalid_character_error(ch);
-        }
-    }
+    details::validate_binary_string(str);
 
     auto padded_str = zero_padding(details::trim_leading_zeros(str), 4);
 
