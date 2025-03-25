@@ -178,6 +178,12 @@ inline auto zero_padding(std::string_view str, std::size_t multiple)
 inline auto binary_to_octal(std::string_view str) -> std::string {
     details::check_empty_string(str);
 
+    for (auto &&ch : str) {
+        if (ch != '0' && ch != '1') {
+            details::throw_invalid_character_error(ch);
+        }
+    }
+
     auto padded_str = zero_padding(details::trim_leading_zeros(str), 3);
 
     std::string result;
@@ -214,6 +220,12 @@ inline auto binary_to_decimal(std::string_view str) -> std::string {
 inline auto binary_to_hexadecimal(std::string_view str) -> std::string {
     details::check_empty_string(str);
 
+    for (auto &&ch : str) {
+        if (ch != '0' && ch != '1') {
+            details::throw_invalid_character_error(ch);
+        }
+    }
+
     auto padded_str = zero_padding(details::trim_leading_zeros(str), 4);
 
     std::string result;
@@ -230,6 +242,10 @@ inline auto octal_to_binary(std::string_view str) -> std::string {
 
     std::string result;
     for (auto &&ch : details::trim_leading_zeros(str)) {
+        if (ch < '0' || ch > '7') {
+            details::throw_invalid_character_error(ch);
+        }
+
         result += details::octal_to_binary_map(ch);
     }
 
@@ -315,6 +331,11 @@ inline auto hexadecimal_to_binary(std::string_view str) -> std::string {
 
     std::string result;
     for (auto &&ch : details::trim_leading_zeros(str)) {
+        if (!((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') ||
+              (ch >= 'a' && ch <= 'f'))) {
+            details::throw_invalid_character_error(ch);
+        }
+
         result += details::hexadecimal_to_binary_map(ch);
     }
 
