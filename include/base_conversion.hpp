@@ -25,20 +25,12 @@ inline constexpr auto octal_base = 8;
 inline constexpr auto decimal_base = 10;
 inline constexpr auto hexadecimal_base = 16;
 
-inline auto trim_leading_zeros(std::string_view str) noexcept
-    -> std::string_view {
-    auto const first_non_zero_pos = str.find_first_not_of('0');
-    return (first_non_zero_pos == std::string_view::npos)
-               ? "0"
-               : str.substr(first_non_zero_pos);
-}
-
 template <bool uppercase = true>
 inline constexpr auto decimal_to_hexadecimal_map(int digit) noexcept -> char {
-    static constexpr std::array<char, 16> upper_chars = {
+    static constexpr std::array<char, 16> upper_chars{
         '0', '1', '2', '3', '4', '5', '6', '7',
         '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-    static constexpr std::array<char, 16> lower_chars = {
+    static constexpr std::array<char, 16> lower_chars{
         '0', '1', '2', '3', '4', '5', '6', '7',
         '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
@@ -144,11 +136,39 @@ inline auto throw_overflow_error() -> void {
                               "string exceeds uint64_t limit");
 }
 
-inline auto check_empty_string(std::string_view str) -> void {
+inline auto validate_string(std::string_view str) -> void {
     if (str.empty()) [[unlikely]] {
         throw std::invalid_argument("base conversion error: string is empty");
     }
-    [[likely]];
+}
+
+inline auto validate_binary_character(char ch) -> void {
+    if (ch != '0' && ch != '1') {
+        details::throw_invalid_character_error(ch);
+    }
+}
+
+inline auto validate_octal_character(char ch) -> void {
+    if (ch < '0' || ch > '7') {
+        details::throw_invalid_character_error(ch);
+    }
+}
+
+inline auto validate_hexadecimal_character(char ch) -> void {
+    if (!((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') ||
+          (ch >= 'a' && ch <= 'f'))) {
+        details::throw_invalid_character_error(ch);
+    }
+}
+
+inline auto trim_leading_zeros(std::string_view str) noexcept
+    -> std::string_view {
+    validate_string(str);
+
+    auto const first_non_zero_pos = str.find_first_not_of('0');
+    return (first_non_zero_pos == std::string_view::npos)
+               ? "0"
+               : str.substr(first_non_zero_pos);
 }
 
 inline auto to_uint64_t(std::string_view str) -> uint64_t {
@@ -168,20 +188,28 @@ inline auto to_uint64_t(std::string_view str) -> uint64_t {
 
 inline auto validate_binary_string(std::string_view str) -> void {
     for (auto &&ch : str) {
-        if (ch != '0' && ch != '1') {
-            throw_invalid_character_error(ch);
-        }
+        details::validate_binary_character(ch);
+    }
+}
+
+inline auto validate_multiple(std::size_t multiple) -> void {
+    if (multiple == 0) [[unlikely]] {
+        throw std::invalid_argument("base conversion error: multiple is zero");
+    }
+}
+
+inline auto validate_overflow(uint64_t const &value, int digit, int base) {
+    if (value > (std::numeric_limits<uint64_t>::max() - digit) / base)
+        [[unlikely]] {
+        details::throw_overflow_error();
     }
 }
 } // namespace details
 
 inline auto zero_padding(std::string_view str, std::size_t multiple)
     -> std::string {
-    details::check_empty_string(str);
-
-    if (multiple == 0) [[unlikely]] {
-        throw std::invalid_argument("base conversion error: multiple is zero");
-    }
+    details::validate_string(str);
+    details::validate_multiple(multiple);
 
     std::string result(str);
     auto const padding_num = (multiple - (result.size() % multiple)) % multiple;
@@ -190,7 +218,7 @@ inline auto zero_padding(std::string_view str, std::size_t multiple)
 }
 
 inline auto binary_to_octal(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
     details::validate_binary_string(str);
 
     auto padded_str = zero_padding(details::trim_leading_zeros(str), 3);
@@ -205,20 +233,15 @@ inline auto binary_to_octal(std::string_view str) -> std::string {
 }
 
 inline auto binary_to_decimal(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
 
     uint64_t result{};
     for (auto &&ch : details::trim_leading_zeros(str)) {
-        if (ch != '0' && ch != '1') {
-            details::throw_invalid_character_error(ch);
-        }
+        details::validate_binary_character(ch);
 
         int digit = ch - '0';
 
-        if (result > (std::numeric_limits<uint64_t>::max() - digit) /
-                         details::binary_base) [[unlikely]] {
-            details::throw_overflow_error();
-        }
+        details::validate_overflow(result, digit, details::binary_base);
 
         result = result * details::binary_base + digit;
     }
@@ -227,7 +250,7 @@ inline auto binary_to_decimal(std::string_view str) -> std::string {
 }
 
 inline auto binary_to_hexadecimal(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
     details::validate_binary_string(str);
 
     auto padded_str = zero_padding(details::trim_leading_zeros(str), 4);
@@ -242,13 +265,11 @@ inline auto binary_to_hexadecimal(std::string_view str) -> std::string {
 }
 
 inline auto octal_to_binary(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
 
     std::string result;
     for (auto &&ch : details::trim_leading_zeros(str)) {
-        if (ch < '0' || ch > '7') {
-            details::throw_invalid_character_error(ch);
-        }
+        details::validate_octal_character(ch);
 
         result += details::octal_to_binary_map(ch);
     }
@@ -257,35 +278,30 @@ inline auto octal_to_binary(std::string_view str) -> std::string {
 }
 
 inline auto octal_to_decimal(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
 
     uint64_t result{};
     for (auto &&ch : details::trim_leading_zeros(str)) {
-        if (ch < '0' || ch > '7') {
-            details::throw_invalid_character_error(ch);
-        }
+        details::validate_octal_character(ch);
 
-        int bit = ch - '0';
+        int digit = ch - '0';
 
-        if (result > (std::numeric_limits<uint64_t>::max() - bit) / 2)
-            [[unlikely]] {
-            details::throw_overflow_error();
-        }
+        details::validate_overflow(result, digit, details::octal_base);
 
-        result = result * 8 + bit;
+        result = result * details::octal_base + digit;
     }
 
     return std::to_string(result);
 }
 
 inline auto octal_to_hexadecimal(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
 
     return binary_to_hexadecimal(octal_to_binary(str));
 }
 
 inline auto decimal_to_binary(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
 
     auto value = details::to_uint64_t(details::trim_leading_zeros(str));
 
@@ -300,7 +316,7 @@ inline auto decimal_to_binary(std::string_view str) -> std::string {
 }
 
 inline auto decimal_to_octal(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
 
     auto value = details::to_uint64_t(details::trim_leading_zeros(str));
 
@@ -315,7 +331,7 @@ inline auto decimal_to_octal(std::string_view str) -> std::string {
 
 template <bool uppercase = true>
 inline auto decimal_to_hexadecimal(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
 
     auto value = details::to_uint64_t(details::trim_leading_zeros(str));
 
@@ -331,14 +347,11 @@ inline auto decimal_to_hexadecimal(std::string_view str) -> std::string {
 }
 
 inline auto hexadecimal_to_binary(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
 
     std::string result;
     for (auto &&ch : details::trim_leading_zeros(str)) {
-        if (!((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') ||
-              (ch >= 'a' && ch <= 'f'))) {
-            details::throw_invalid_character_error(ch);
-        }
+        details::validate_hexadecimal_character(ch);
 
         result += details::hexadecimal_to_binary_map(ch);
     }
@@ -347,27 +360,21 @@ inline auto hexadecimal_to_binary(std::string_view str) -> std::string {
 }
 
 inline auto hexadecimal_to_octal(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
 
     return binary_to_octal(hexadecimal_to_binary(str));
 }
 
 inline auto hexadecimal_to_decimal(std::string_view str) -> std::string {
-    details::check_empty_string(str);
+    details::validate_string(str);
 
     uint64_t result{};
     for (auto &&ch : details::trim_leading_zeros(str)) {
-        if (!((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') ||
-              (ch >= 'a' && ch <= 'f'))) {
-            details::throw_invalid_character_error(ch);
-        }
+        details::validate_hexadecimal_character(ch);
 
         int digit = details::hexadecimal_to_decimal_map(ch);
 
-        if (result > (std::numeric_limits<uint64_t>::max() - digit) /
-                         details::hexadecimal_base) [[unlikely]] {
-            details::throw_overflow_error();
-        }
+        details::validate_overflow(result, digit, details::hexadecimal_base);
 
         result = result * details::hexadecimal_base + digit;
     }
